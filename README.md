@@ -19,62 +19,97 @@ autonomously. You push a change to GitHub; every device converges within the hou
 
 ## Architecture
 
-```
-┌─────────────────────────────────────────────────────────┐
-│                     YOU (any machine)                   │
-│              git push → github.com/temhr/ansidroid      │
-└────────────────────────────┬────────────────────────────┘
-                             │  GitHub (source of truth)
-          ┌──────────────────┼───────────────┬────────────┐
-          │                  │               │            │
-    ┌─────▼──────┐   ┌───────▼────┐  ┌──────▼─────┐ ┌───▼──────┐
-    │  p8p        │   │  p3axl     │  │  pxl       │ │  n5x     │
-    │  Termux     │   │  Termux    │  │  Termux    │ │  Termux  │
-    │  crond      │   │  crond     │  │  crond     │ │  crond   │
-    │  ansible-   │   │  ansible-  │  │  ansible-  │ │ ansible- │
-    │  pull       │   │  pull      │  │  pull      │ │  pull    │
-    └─────────────┘   └────────────┘  └────────────┘ └──────────┘
-         ↑ hourly cron on each device, minute staggered by device name seed
-```
-
-### Layers and division of concerns
+### How it flows
 
 ```
-Layer 1 — Identity        host_vars/<device>.yml
-                          Each device knows its own name, OS group, package
-                          list, upgrade strategy, and feature flags.
+YOU (any machine)
+└── git push → github.com/temhr/ansidroid
+                    │
+                    │  each device polls GitHub every hour
+                    │  and applies any changes to itself
+                    │
+        ┌───────────┼───────────┬───────────┐
+        ▼           ▼           ▼           ▼
+      p8p         p3axl        pxl         n5x
+   (GrapheneOS) (LineageOS) (LineageOS)  (Android)
+        │
+        │  on each device, inside Termux:
+        │
+        ├── crond            runs the pull loop on a schedule
+        ├── ansible-pull     clones the repo, runs local.yml
+        └── local.yml        applies roles based on device identity
+```
 
-Layer 2 — Group policy    group_vars/grapheneos.yml
-                          group_vars/lineageos.yml
-                          group_vars/android.yml
-                          group_vars/all/     (applies to every device)
-                          OS-level defaults shared across all devices
-                          running the same OS.
+### Repo layout
 
-Layer 3 — Roles           roles/
-                          Discrete, idempotent units of work. Each role
-                          manages one concern and is safe to re-run every
-                          hour without side effects.
-
-                          common/        → runs on every device
-                            packages     → safe pkg update + upgrade
-                            dotfiles     → .bashrc, .profile, aliases
-                            logging      → log rotation, audit trail
-                          cron/          → installs the ansible-pull loop
-                                           and Termux:Boot crond starter
-                          obtainium/     → pushes per-device app JSON list
-                          syncthing/     → deploys syncthing config
-                          grapheneos/    → GOS-specific tasks
-                          lineageos/     → su handling, MicroG awareness
-                          notifications/ → termux-notification on failure
-
-Layer 4 — Entry point     local.yml
-                          ansible-pull default playbook. Loads identity,
-                          assigns OS group, runs roles conditionally.
-
-Layer 5 — Bootstrap       bootstrap.sh
-                          Run once per device in Termux. Installs deps,
-                          writes device identity, fires the first pull.
+```
+ansidroid/
+│   local.yml                       ansible-pull entry point; runs roles conditionally by OS group
+│   bootstrap.sh                    run once per device; installs deps, writes identity, fires first pull
+│   ansible.cfg                     Ansible settings tuned for Termux (log path, no retry files)
+│   inventory                       targets localhost only — the device provisions itself
+│
+├── host_vars/                      LAYER 1 — per-device identity and overrides
+│   ├── p8p.yml                     Pixel 8 Pro   · GrapheneOS · conservative upgrades · syncthing + notifications
+│   ├── p3axl.yml                   Pixel 3a XL  · LineageOS  · conservative upgrades
+│   ├── pxl.yml                     Pixel XL     · LineageOS  · full upgrade strategy
+│   └── n5x.yml                     Nexus 5X     · Android    · skip upgrades · minimal packages
+│
+├── group_vars/                     LAYER 2 — shared OS-level defaults (host_vars takes precedence)
+│   ├── all/
+│   │   ├── main.yml                vars for every device: repo URL, log paths, cron timing
+│   │   └── vault.yml               encrypted secrets via ansible-vault (API keys, passwords)
+│   ├── grapheneos.yml              syncthing on, notifications on, no GMS by default
+│   ├── lineageos.yml               root and MicroG off by default; override in host_vars
+│   └── android.yml                 upgrade_strategy: skip, minimal feature set
+│
+├── roles/                          LAYER 3 — idempotent units of work, safe to re-run hourly
+│   ├── common/                     runs on every device every pull
+│   │   ├── tasks/
+│   │   │   ├── main.yml            calls the three sub-task files in order
+│   │   │   ├── packages.yml        update index · upgrade (per strategy) · install packages · verify ansible
+│   │   │   ├── dotfiles.yml        render .bashrc with device name in prompt
+│   │   │   └── logging.yml         nightly cron to trim ansible-pull.log to last 500 lines
+│   │   ├── templates/
+│   │   │   └── bashrc.j2           shell config; prompt shows device handle and OS group
+│   │   └── defaults/main.yml
+│   │
+│   ├── cron/                       installs the self-updating hourly loop
+│   │   ├── tasks/main.yml          deploys run-pull.sh · staggered cron job · Termux:Boot crond script
+│   │   └── templates/
+│   │       └── run-pull.sh.j2      ansible-pull wrapper with lockfile guard and retry logic
+│   │
+│   ├── obtainium/                  manages per-device app list
+│   │   └── tasks/main.yml          pushes files/obtainium/<device>_apps.json to Obtainium data dir
+│   │
+│   ├── syncthing/                  deploys Syncthing — p8p only
+│   │   ├── tasks/main.yml          writes config, installs boot script, starts daemon if stopped
+│   │   └── templates/
+│   │       └── syncthing_config.xml.j2     folder definitions + API key from vault
+│   │
+│   ├── grapheneos/                 p8p only
+│   │   ├── tasks/main.yml          writes manual-step checklist (PIN, DNS, auto-reboot); checks Termux:API
+│   │   └── defaults/main.yml
+│   │
+│   ├── lineageos/                  p3axl and pxl
+│   │   ├── tasks/main.yml          detects su and MicroG; warns if host_vars disagrees with reality
+│   │   └── defaults/main.yml
+│   │
+│   └── notifications/              p8p only (requires Termux:API)
+│       ├── tasks/main.yml          fires Android notification on pull failure; clears sentinel on success
+│       └── defaults/main.yml
+│
+└── files/                          LAYER 4 — static assets copied verbatim to devices
+    ├── packages/
+    │   ├── common.txt              installed on every device: git python ansible cronie openssh …
+    │   ├── grapheneos.txt          reference list for p8p extras (add to host_vars extra_packages)
+    │   ├── lineageos.txt           reference list for p3axl/pxl extras
+    │   └── android.txt             (intentionally minimal)
+    └── obtainium/
+        ├── p8p_apps.json           per-device app lists in Obtainium's native export format
+        ├── p3axl_apps.json         edit and push to add/remove apps; device picks up within the hour
+        ├── pxl_apps.json
+        └── n5x_apps.json
 ```
 
 ---
@@ -140,10 +175,11 @@ Reference vault vars in playbooks as `{{ vault_some_secret }}`.
 
 ## Logs
 
-| File                          | Contents                              |
-|-------------------------------|---------------------------------------|
-| `~/.ansible/ansible-pull.log` | Full output of every ansible-pull run |
-| `~/.ansible/upgrade.log`      | Timestamped upgrade result per run    |
-| `~/.ansible/pkg_state_before.txt` | Installed packages before upgrade |
+| File                              | Contents                               |
+|-----------------------------------|----------------------------------------|
+| `~/.ansible/ansible-pull.log`     | Full output of every ansible-pull run  |
+| `~/.ansible/upgrade.log`          | Timestamped upgrade result per run     |
+| `~/.ansible/pkg_state_before.txt` | Installed packages snapshot pre-upgrade|
+| `~/.ansible/setup_checklist.txt`  | Manual setup steps for this device     |
 
 Log rotation runs nightly at 03:00, keeping the last 500 lines of the pull log.
