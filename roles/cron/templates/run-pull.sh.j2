@@ -1,0 +1,63 @@
+#!/data/data/com.termux/files/usr/bin/bash
+# =============================================================================
+# run-pull.sh — ansible-pull wrapper
+# Managed by ansible-pull (roles/cron/templates/run-pull.sh.j2)
+# Device: {{ device_label }} ({{ device_name }})
+# Do not edit manually — this file is overwritten on every pull.
+# =============================================================================
+
+REPO="{{ ansible_pull_repo }}"
+DEVICE="{{ device_name }}"
+LOCKFILE="{{ ansible_state_dir }}/pull.lock"
+VAULT_PASS="{{ ansible_state_dir }}/.vault_pass"
+LOG="{{ ansible_log_file }}"
+MAX_RETRIES=3
+RETRY_DELAY=60   # seconds between retries
+
+# ---------------------------------------------------------------------------
+# Lockfile guard — prevents two concurrent ansible-pull processes.
+# Uses the PID as the lock content so we can detect stale locks.
+# ---------------------------------------------------------------------------
+if [ -f "$LOCKFILE" ]; then
+  LOCKED_PID=$(cat "$LOCKFILE" 2>/dev/null)
+  if kill -0 "$LOCKED_PID" 2>/dev/null; then
+    echo "$(date -Iseconds) [$DEVICE] ansible-pull already running (PID $LOCKED_PID), skipping."
+    exit 0
+  else
+    # Stale lock from a previous crashed run — remove it.
+    echo "$(date -Iseconds) [$DEVICE] Removing stale lockfile (PID $LOCKED_PID no longer running)."
+    rm -f "$LOCKFILE"
+  fi
+fi
+
+echo $$ > "$LOCKFILE"
+trap "rm -f '$LOCKFILE'" EXIT INT TERM
+
+# ---------------------------------------------------------------------------
+# Retry loop — transient GitHub connectivity issues are common on mobile.
+# Retries up to MAX_RETRIES times before giving up.
+# ---------------------------------------------------------------------------
+for attempt in $(seq 1 $MAX_RETRIES); do
+  echo "$(date -Iseconds) [$DEVICE] Starting ansible-pull (attempt $attempt of $MAX_RETRIES)"
+
+  ansible-pull \
+    -U "$REPO" \
+    -i localhost, \
+    -e "@{{ ansible_state_dir }}/device_vars.yml" \
+    --vault-password-file "$VAULT_PASS" \
+    && {
+      echo "$(date -Iseconds) [$DEVICE] ansible-pull succeeded."
+      exit 0
+    }
+
+  EXIT_CODE=$?
+  echo "$(date -Iseconds) [$DEVICE] ansible-pull failed (exit $EXIT_CODE)."
+
+  if [ $attempt -lt $MAX_RETRIES ]; then
+    echo "$(date -Iseconds) [$DEVICE] Retrying in ${RETRY_DELAY}s..."
+    sleep $RETRY_DELAY
+  fi
+done
+
+echo "$(date -Iseconds) [$DEVICE] All $MAX_RETRIES attempts failed. Giving up until next cron run."
+exit 1

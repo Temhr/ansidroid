@@ -1,0 +1,20 @@
+---
+# =============================================================================
+# host_vars/pxl.yml — Pixel XL (LineageOS) — tertiary device
+# =============================================================================
+
+device_name: pxl
+device_label: "Pixel XL"
+os_group: lineageos
+
+has_microg: false
+has_root: false
+
+# Full upgrade on this device — it is lower priority so we can accept more risk.
+upgrade_strategy: full
+max_upgrade_failures: 3
+
+extra_packages:
+  - neovim
+
+obtainium_config: "pxl_apps.json"

@@ -1,0 +1,19 @@
+---
+# =============================================================================
+# group_vars/lineageos.yml — defaults for all LineageOS devices (p3axl, pxl)
+#
+# LineageOS devices may have root (via Magisk) and/or MicroG.
+# These flags are set per-device in host_vars.
+# =============================================================================
+
+os_label: "LineageOS"
+
+# Defaults — override in host_vars if a specific device has root or MicroG.
+has_root: false
+has_gms: false
+has_microg: false            # set true if the device runs LineageOS for microG
+
+syncthing_enabled: false
+termux_api_available: false
+notifications_enabled: false
+upgrade_strategy: conservative

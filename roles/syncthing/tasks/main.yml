@@ -1,0 +1,50 @@
+---
+# =============================================================================
+# roles/syncthing/tasks/main.yml — deploy and manage Syncthing
+#
+# Syncthing runs as a background daemon in Termux on p8p and keeps selected
+# directories in sync with your PC or home server without any cloud middleman.
+#
+# This role:
+#   1. Deploys the Syncthing config (config.xml) from a template.
+#   2. Ensures Syncthing starts on boot via Termux:Boot.
+#   3. Ensures Syncthing is currently running.
+#
+# Only runs on devices where syncthing_enabled: true (currently p8p only).
+# Syncthing itself is installed as a Termux package in the common/packages role.
+# =============================================================================
+
+- name: Ensure Syncthing config directory exists
+  file:
+    path: "{{ ansible_env.HOME }}/.config/syncthing"
+    state: directory
+    mode: "0700"
+
+- name: Deploy Syncthing config from template
+  template:
+    src: syncthing_config.xml.j2
+    dest: "{{ ansible_env.HOME }}/.config/syncthing/config.xml"
+    mode: "0600"
+    backup: true
+  # Mode 0600 — config contains device IDs and API keys.
+  # backup: true keeps a .xml~ copy in case a template error breaks sync.
+  notify: Restart syncthing
+
+- name: Install Syncthing Termux:Boot start script
+  copy:
+    dest: "{{ ansible_env.HOME }}/.termux/boot/start-syncthing.sh"
+    mode: "0755"
+    content: |
+      #!/data/data/com.termux/files/usr/bin/sh
+      # Managed by ansible-pull (roles/syncthing) — do not edit manually.
+      syncthing serve --no-browser --no-restart &
+
+- name: Check if Syncthing is running
+  command: pgrep -x syncthing
+  register: syncthing_running
+  failed_when: false
+  changed_when: false
+
+- name: Start Syncthing if not running
+  shell: nohup syncthing serve --no-browser --no-restart >> ~/.ansible/syncthing.log 2>&1 &
+  when: syncthing_running.rc != 0

@@ -1,0 +1,26 @@
+---
+# =============================================================================
+# group_vars/grapheneos.yml — defaults for all GrapheneOS devices
+#
+# Currently only p8p is in this group, but the structure supports adding more.
+# These vars are overridden by anything in host_vars/p8p.yml.
+# =============================================================================
+
+# GrapheneOS uses the standard Termux package repos (no special repos needed).
+os_label: "GrapheneOS"
+
+# GrapheneOS has no root access and no Google Play Services by default.
+# Sandboxed Google Play can be optionally installed through the OS itself.
+has_root: false
+has_gms: false               # set true in host_vars if sandboxed Play is installed
+has_microg: false
+
+# Syncthing is enabled on the primary device only.
+syncthing_enabled: true
+
+# Termux:API is installed on this device, enabling termux-notification etc.
+termux_api_available: true
+notifications_enabled: true
+
+# Package upgrade strategy: conservative avoids dependency conflicts.
+upgrade_strategy: conservative

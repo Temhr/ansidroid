@@ -1,0 +1,20 @@
+---
+# =============================================================================
+# group_vars/android.yml — defaults for stock Android devices (n5x)
+#
+# Stock Android with Google Play Services. Older/legacy hardware.
+# Kept minimal to reduce churn on aging devices.
+# =============================================================================
+
+os_label: "Android (stock)"
+
+has_root: false
+has_gms: true                # Google Play Services present
+has_microg: false
+
+syncthing_enabled: false
+termux_api_available: false
+notifications_enabled: false
+
+# Skip upgrades on old hardware to avoid breaking a device we can't easily fix.
+upgrade_strategy: skip

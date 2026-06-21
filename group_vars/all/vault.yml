@@ -1,0 +1,22 @@
+---
+# =============================================================================
+# group_vars/all/vault.yml — encrypted secrets (ansible-vault)
+#
+# This file should be encrypted. To edit it:
+#   ansible-vault edit group_vars/all/vault.yml
+#
+# To encrypt it initially:
+#   ansible-vault encrypt group_vars/all/vault.yml
+#
+# Reference these in playbooks as: {{ vault_some_key }}
+# The vault password lives at ~/.ansible/.vault_pass on each device.
+# =============================================================================
+
+# Placeholder — replace with your real secrets after encrypting this file.
+# Example structure (plaintext before encryption):
+#
+# vault_syncthing_api_key: "your-syncthing-api-key"
+# vault_github_token: "your-read-only-github-token"
+# vault_example_api_key: "example"
+
+vault_example: "REPLACE_ME"

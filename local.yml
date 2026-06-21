@@ -1,0 +1,152 @@
+---
+# =============================================================================
+# local.yml — ansible-pull entry point
+#
+# ansible-pull clones this repo onto the device and then runs this file.
+# The filename MUST be local.yml (ansible-pull's default) unless you pass -e.
+#
+# Flow:
+#   1. Load device identity from ~/.ansible/device_vars.yml
+#      (written by bootstrap.sh — contains `device_name: p8p` etc.)
+#   2. Load host_vars for that device, which includes `os_group`.
+#   3. Run the `common` role on every device unconditionally.
+#   4. Run `cron` on every device (installs/maintains the pull loop itself).
+#   5. Run OS-specific roles based on `os_group`.
+#   6. Run `notifications` only on p8p (has Termux:API).
+# =============================================================================
+
+# ---------------------------------------------------------------------------
+# Play 1 — Load identity and resolve which OS group this device belongs to.
+# We use group_by here even though we are only ever talking to localhost;
+# it lets group_vars files be loaded automatically by Ansible's var precedence.
+# ---------------------------------------------------------------------------
+- name: Load device identity
+  hosts: localhost
+  connection: local
+  gather_facts: true
+
+  pre_tasks:
+    - name: Load device identity vars (written by bootstrap.sh)
+      include_vars: "~/.ansible/device_vars.yml"
+      # Result: device_name is now available (e.g. "p8p")
+
+    - name: Load host_vars for this device
+      # host_vars/<device_name>.yml is auto-loaded by Ansible when the
+      # inventory hostname matches — but since we're always "localhost",
+      # we load it explicitly here using the device_name var.
+      include_vars: "{{ playbook_dir }}/host_vars/{{ device_name }}.yml"
+
+    - name: Assign device to its OS group
+      # This causes group_vars/<os_group>.yml to be loaded automatically.
+      group_by:
+        key: "{{ os_group }}"
+      # os_group comes from host_vars/<device>.yml
+      # Valid values: grapheneos, lineageos, android
+
+# ---------------------------------------------------------------------------
+# Play 2 — Common: runs on every device regardless of OS.
+# Handles packages, dotfiles, and logging.
+# ---------------------------------------------------------------------------
+- name: Apply common configuration
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  pre_tasks:
+    # Re-load vars since each play starts fresh.
+    - include_vars: "~/.ansible/device_vars.yml"
+    - include_vars: "{{ playbook_dir }}/host_vars/{{ device_name }}.yml"
+
+  roles:
+    - role: common
+
+# ---------------------------------------------------------------------------
+# Play 3 — Cron: installs and maintains the ansible-pull hourly loop.
+# Runs after common so that all packages (cronie etc.) are guaranteed present.
+# Also installs the Termux:Boot crond starter so it survives reboots.
+# ---------------------------------------------------------------------------
+- name: Install and maintain ansible-pull cron loop
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  pre_tasks:
+    - include_vars: "~/.ansible/device_vars.yml"
+    - include_vars: "{{ playbook_dir }}/host_vars/{{ device_name }}.yml"
+
+  roles:
+    - role: cron
+
+# ---------------------------------------------------------------------------
+# Play 4 — GrapheneOS: only runs on p8p.
+# Handles sandboxed Play Store config, hardening tasks, Syncthing.
+# ---------------------------------------------------------------------------
+- name: Apply GrapheneOS-specific configuration
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  pre_tasks:
+    - include_vars: "~/.ansible/device_vars.yml"
+    - include_vars: "{{ playbook_dir }}/host_vars/{{ device_name }}.yml"
+
+  roles:
+    - role: grapheneos
+      when: os_group == 'grapheneos'
+    - role: syncthing
+      when: os_group == 'grapheneos'
+    - role: obtainium
+      when: os_group == 'grapheneos'
+
+# ---------------------------------------------------------------------------
+# Play 5 — LineageOS: runs on p3axl and pxl.
+# Handles su detection, MicroG awareness, Obtainium.
+# ---------------------------------------------------------------------------
+- name: Apply LineageOS-specific configuration
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  pre_tasks:
+    - include_vars: "~/.ansible/device_vars.yml"
+    - include_vars: "{{ playbook_dir }}/host_vars/{{ device_name }}.yml"
+
+  roles:
+    - role: lineageos
+      when: os_group == 'lineageos'
+    - role: obtainium
+      when: os_group == 'lineageos'
+
+# ---------------------------------------------------------------------------
+# Play 6 — Stock Android: runs on n5x.
+# Minimal Obtainium config, no OS-specific hardening.
+# ---------------------------------------------------------------------------
+- name: Apply stock Android configuration
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  pre_tasks:
+    - include_vars: "~/.ansible/device_vars.yml"
+    - include_vars: "{{ playbook_dir }}/host_vars/{{ device_name }}.yml"
+
+  roles:
+    - role: obtainium
+      when: os_group == 'android'
+
+# ---------------------------------------------------------------------------
+# Play 7 — Notifications: only on p8p which has Termux:API installed.
+# Sends a notification if any previous play reported a failure.
+# ---------------------------------------------------------------------------
+- name: Send failure notification if needed
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  pre_tasks:
+    - include_vars: "~/.ansible/device_vars.yml"
+    - include_vars: "{{ playbook_dir }}/host_vars/{{ device_name }}.yml"
+
+  roles:
+    - role: notifications
+      when: notifications_enabled | default(false)

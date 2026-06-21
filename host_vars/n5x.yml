@@ -1,0 +1,24 @@
+---
+# =============================================================================
+# host_vars/n5x.yml — Nexus 5X (stock Android) — legacy/testing device
+#
+# This is old hardware. We keep it stable by never upgrading existing packages
+# and keeping the package list minimal.
+# =============================================================================
+
+device_name: n5x
+device_label: "Nexus 5X"
+os_group: android
+
+has_gms: true
+has_root: false
+has_microg: false
+
+# Skip all upgrades — only install missing packages.
+upgrade_strategy: skip
+max_upgrade_failures: 1
+
+# Minimal package set for this aging device.
+extra_packages: []
+
+obtainium_config: "n5x_apps.json"

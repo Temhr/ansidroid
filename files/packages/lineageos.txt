@@ -1,0 +1,7 @@
+# =============================================================================
+# files/packages/lineageos.txt — reference for LineageOS extra packages
+# Add desired packages to extra_packages in host_vars/p3axl.yml or pxl.yml.
+# =============================================================================
+
+# ripgrep
+# neovim

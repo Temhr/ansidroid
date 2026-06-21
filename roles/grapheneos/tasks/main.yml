@@ -1,0 +1,57 @@
+---
+# =============================================================================
+# roles/grapheneos/tasks/main.yml — GrapheneOS-specific configuration
+#
+# GrapheneOS is a hardened Android fork with no Google services by default.
+# Tasks here deal with GOS-specific userspace concerns:
+#   - Verifying expected files/configs are in place
+#   - Reminders for manual steps that require the Settings UI
+#   - Any GOS-specific Termux configuration
+#
+# IMPORTANT: GrapheneOS intentionally does not expose a root shell in normal
+# use. All tasks here run as the regular Termux user. System-level settings
+# (network, permissions, profiles) must be configured via the Settings app.
+# =============================================================================
+
+- name: Confirm GrapheneOS-specific environment
+  debug:
+    msg: >
+      Running GrapheneOS role on {{ device_label }}.
+      has_gms={{ has_gms }}, hardened_malloc={{ grapheneos_hardened_malloc }}
+
+# ---------------------------------------------------------------------------
+# Network hardening reminder
+# These cannot be set programmatically without root or ADB from a PC.
+# We log them as reminders in case this is a fresh device setup.
+# ---------------------------------------------------------------------------
+- name: Log hardening checklist reminder
+  lineinfile:
+    path: "{{ ansible_state_dir }}/setup_checklist.txt"
+    line: "{{ item }}"
+    create: true
+  loop:
+    - "[ ] Settings > Network > Private DNS: set to your preferred DoT resolver"
+    - "[ ] Settings > Security > Auto-reboot: enable (72h recommended)"
+    - "[ ] Settings > Security > PIN scrambling: enable"
+    - "[ ] Settings > Apps > Sandboxed Google Play: install only if needed"
+    - "[ ] Install Termux:Boot and open it once to activate boot permission"
+    - "[ ] Install Termux:API and open it once to activate API permissions"
+  # This file is a persistent to-do list for manual steps on this device.
+  # View it with: cat ~/.ansible/setup_checklist.txt
+
+# ---------------------------------------------------------------------------
+# Verify Termux:API is available (required for notifications role)
+# The app must be installed and opened at least once for this to work.
+# ---------------------------------------------------------------------------
+- name: Check if termux-notification is available
+  command: which termux-notification
+  register: termux_api_check
+  failed_when: false
+  changed_when: false
+
+- name: Warn if Termux:API is not installed
+  debug:
+    msg: >
+      termux-notification not found. Install Termux:API from F-Droid and
+      open it once to enable notifications. Then re-run ansible-pull.
+  when: termux_api_check.rc != 0

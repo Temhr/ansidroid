@@ -1,0 +1,12 @@
+---
+# =============================================================================
+# roles/lineageos/defaults/main.yml
+# =============================================================================
+
+# Path to the su binary if root is available (Magisk standard location).
+lineageos_su_path: "/system/xbin/su"
+
+# MicroG components to check for if has_microg is true.
+lineageos_microg_packages:
+  - "org.microg.gms.core"
+  - "com.google.android.gms"   # MicroG presents as this package ID

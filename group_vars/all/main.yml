@@ -1,0 +1,38 @@
+---
+# =============================================================================
+# group_vars/all/main.yml — variables applied to every device
+#
+# These are the lowest-precedence vars; host_vars and group_vars for specific
+# OS groups override anything set here.
+# =============================================================================
+
+# ---------------------------------------------------------------------------
+# Repository — update this to your actual GitHub repo URL.
+# Used by the cron role when writing the run-pull.sh wrapper script.
+# ---------------------------------------------------------------------------
+ansible_pull_repo: "git@github.com:temhr/ansidroid.git"
+
+# ---------------------------------------------------------------------------
+# Logging
+# ---------------------------------------------------------------------------
+ansible_log_file: "{{ ansible_env.HOME }}/.ansible/ansible-pull.log"
+upgrade_log_file: "{{ ansible_env.HOME }}/.ansible/upgrade.log"
+pkg_state_file:   "{{ ansible_env.HOME }}/.ansible/pkg_state_before.txt"
+
+# Cron log rotation: keep this many lines in ansible-pull.log
+log_max_lines: 500
+
+# ---------------------------------------------------------------------------
+# Cron timing defaults
+# The actual cron minute is seeded from device_name so each device runs
+# at a different time, avoiding a thundering herd on GitHub.
+# Hour is fixed at every hour; minute is computed in the cron role.
+# ---------------------------------------------------------------------------
+cron_hour: "*"
+
+# ---------------------------------------------------------------------------
+# Feature flags (can be overridden per host or per OS group)
+# ---------------------------------------------------------------------------
+syncthing_enabled: false
+notifications_enabled: false
+termux_api_available: false

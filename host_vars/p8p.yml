@@ -1,0 +1,57 @@
+---
+# =============================================================================
+# host_vars/p8p.yml — Pixel 8 Pro (GrapheneOS) — primary device
+#
+# This file is the single source of truth for everything specific to this
+# physical device. It overrides group_vars/grapheneos.yml and group_vars/all/.
+# =============================================================================
+
+device_name: p8p
+device_label: "Pixel 8 Pro"
+os_group: grapheneos
+
+# ---------------------------------------------------------------------------
+# Sandboxed Google Play — GrapheneOS supports this natively.
+# Set to true if you've installed it via Settings → Apps → Sandboxed Google Play
+# ---------------------------------------------------------------------------
+has_gms: false               # change to true if sandboxed Play is installed
+
+# ---------------------------------------------------------------------------
+# Package upgrade strategy (see README for options)
+# ---------------------------------------------------------------------------
+upgrade_strategy: conservative
+
+# ---------------------------------------------------------------------------
+# Max consecutive upgrade failures before the role writes a warning.
+# Does not abort the run; just flags it in the upgrade log.
+# ---------------------------------------------------------------------------
+max_upgrade_failures: 3
+
+# ---------------------------------------------------------------------------
+# Termux packages specific to this device.
+# common.txt is always applied; this list is additive.
+# ---------------------------------------------------------------------------
+extra_packages:
+  - termux-api        # required for termux-notification (Termux:API app needed)
+  - syncthing         # file sync daemon
+  - ripgrep
+  - fd
+  - bat
+  - neovim
+
+# ---------------------------------------------------------------------------
+# Obtainium app list file (relative to playbook_dir/files/obtainium/)
+# ---------------------------------------------------------------------------
+obtainium_config: "p8p_apps.json"
+
+# ---------------------------------------------------------------------------
+# Syncthing — enabled on primary device only
+# ---------------------------------------------------------------------------
+syncthing_enabled: true
+syncthing_config_template: "syncthing_config.xml.j2"  # in roles/syncthing/templates/
+
+# ---------------------------------------------------------------------------
+# Notifications via termux-notification (requires Termux:API app)
+# ---------------------------------------------------------------------------
+termux_api_available: true
+notifications_enabled: true

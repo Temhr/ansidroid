@@ -1,0 +1,62 @@
+{
+  "_comment": "Obtainium app list for p8p (Pixel 8 Pro / GrapheneOS).",
+  "_comment2": "Managed by ansible-pull. Edit here and push to update the device.",
+  "_comment3": "Each app entry matches Obtainium's export format.",
+  "apps": [
+    {
+      "id": "org.fdroid.fdroid",
+      "url": "https://f-droid.org/repo/index-v2.json",
+      "author": "F-Droid",
+      "name": "F-Droid",
+      "installedVersion": null,
+      "latestVersion": null,
+      "apkUrls": [],
+      "preferredApkIndex": 0,
+      "additionalSettings": "{}"
+    },
+    {
+      "id": "com.termux",
+      "url": "https://github.com/termux/termux-app",
+      "author": "Termux",
+      "name": "Termux",
+      "installedVersion": null,
+      "latestVersion": null,
+      "apkUrls": [],
+      "preferredApkIndex": 0,
+      "additionalSettings": "{}"
+    },
+    {
+      "id": "com.termux.boot",
+      "url": "https://github.com/termux/termux-boot",
+      "author": "Termux",
+      "name": "Termux:Boot",
+      "installedVersion": null,
+      "latestVersion": null,
+      "apkUrls": [],
+      "preferredApkIndex": 0,
+      "additionalSettings": "{}"
+    },
+    {
+      "id": "com.termux.api",
+      "url": "https://github.com/termux/termux-api",
+      "author": "Termux",
+      "name": "Termux:API",
+      "installedVersion": null,
+      "latestVersion": null,
+      "apkUrls": [],
+      "preferredApkIndex": 0,
+      "additionalSettings": "{}"
+    },
+    {
+      "id": "org.syncthing.lite",
+      "url": "https://github.com/syncthing/syncthing-android",
+      "author": "Syncthing",
+      "name": "Syncthing",
+      "installedVersion": null,
+      "latestVersion": null,
+      "apkUrls": [],
+      "preferredApkIndex": 0,
+      "additionalSettings": "{}"
+    }
+  ]
+}

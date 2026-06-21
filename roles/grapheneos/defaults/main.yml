@@ -1,0 +1,12 @@
+---
+# =============================================================================
+# roles/grapheneos/defaults/main.yml
+# =============================================================================
+
+# GrapheneOS keeps app profiles in this standard location.
+# Used to verify profile integrity or push profile configurations.
+grapheneos_profiles_dir: "/data/data"  # root-only; userspace tasks use /sdcard
+
+# Hardened malloc is on by default in GrapheneOS. Set to false to disable
+# (not recommended — only for specific compatibility debugging).
+grapheneos_hardened_malloc: true

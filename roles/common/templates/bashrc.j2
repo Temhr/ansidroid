@@ -1,0 +1,47 @@
+# =============================================================================
+# .bashrc — managed by ansible-pull
+# Device: {{ device_label }} ({{ device_name }}) | OS: {{ os_group }}
+# Do not edit manually — changes will be overwritten on the next pull.
+# To customise, edit roles/common/templates/bashrc.j2 in the repo.
+# =============================================================================
+
+# If not running interactively, do nothing.
+[ -z "$PS1" ] && return
+
+# ---------------------------------------------------------------------------
+# Prompt — shows device name and OS group so you always know which phone
+# you are looking at when SSHing into multiple devices.
+# ---------------------------------------------------------------------------
+PS1='\[\e[32m\][{{ device_name }}]\[\e[0m\] \[\e[34m\]\w\[\e[0m\] \$ '
+
+# ---------------------------------------------------------------------------
+# Environment
+# ---------------------------------------------------------------------------
+export EDITOR=vim
+export PAGER=less
+export TERM=xterm-256color
+
+# Termux-specific PATH additions
+export PATH="$PATH:$HOME/.local/bin:$HOME/.ansible"
+
+# ---------------------------------------------------------------------------
+# Ansible environment
+# ---------------------------------------------------------------------------
+export ANSIBLE_LOG_PATH="{{ ansible_log_file }}"
+export ANSIBLE_VAULT_PASSWORD_FILE="{{ ansible_state_dir }}/.vault_pass"
+
+# ---------------------------------------------------------------------------
+# Aliases
+# ---------------------------------------------------------------------------
+alias ll='ls -la'
+alias la='ls -A'
+alias ..='cd ..'
+
+# Trigger an immediate ansible-pull (useful for testing changes)
+alias apull='~/.ansible/run-pull.sh'
+
+# Tail the ansible-pull log
+alias aplog='tail -f {{ ansible_log_file }}'
+
+# Show last upgrade log
+alias upgradeLog='cat {{ upgrade_log_file }}'

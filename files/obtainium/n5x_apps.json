@@ -1,0 +1,27 @@
+{
+  "_comment": "Obtainium app list for n5x. Managed by ansible-pull.",
+  "apps": [
+    {
+      "id": "com.termux",
+      "url": "https://github.com/termux/termux-app",
+      "author": "Termux",
+      "name": "Termux",
+      "installedVersion": null,
+      "latestVersion": null,
+      "apkUrls": [],
+      "preferredApkIndex": 0,
+      "additionalSettings": "{}"
+    },
+    {
+      "id": "com.termux.boot",
+      "url": "https://github.com/termux/termux-boot",
+      "author": "Termux",
+      "name": "Termux:Boot",
+      "installedVersion": null,
+      "latestVersion": null,
+      "apkUrls": [],
+      "preferredApkIndex": 0,
+      "additionalSettings": "{}"
+    }
+  ]
+}

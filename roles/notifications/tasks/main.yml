@@ -1,0 +1,57 @@
+---
+# =============================================================================
+# roles/notifications/tasks/main.yml — failure notifications via Termux:API
+#
+# Sends an Android notification when ansible-pull encounters errors.
+# Only runs on devices where:
+#   notifications_enabled: true   (group_vars/grapheneos.yml — currently p8p)
+#   termux_api_available: true    (requires Termux:API app from F-Droid)
+#
+# termux-notification docs:
+#   https://wiki.termux.com/wiki/Termux:API#termux-notification
+# =============================================================================
+
+# ---------------------------------------------------------------------------
+# Check for failed tasks from previous plays.
+# Ansible sets ansible_failed_task when a task fails and ignore_errors is set.
+# We use a stat check on a sentinel file that the run-pull.sh wrapper writes
+# on failure, since we can't reliably read ansible_failed_task cross-play.
+# ---------------------------------------------------------------------------
+- name: Check for pull failure sentinel file
+  stat:
+    path: "{{ ansible_state_dir }}/last_pull_failed"
+  register: failure_sentinel
+
+- name: Send failure notification if sentinel exists
+  command: >
+    termux-notification
+    --id 1001
+    --title "ansible-pull failed on {{ device_label }}"
+    --content "Check ~/.ansible/ansible-pull.log for details. Tap to open Termux."
+    --priority {{ notification_priority }}
+    --channel {{ notification_channel }}
+    --action "termux-open {{ ansible_log_file }}"
+  when: failure_sentinel.stat.exists
+  failed_when: false
+  # failed_when: false — if Termux:API is not properly set up, don't abort
+  # the entire playbook over a notification failure.
+
+- name: Remove failure sentinel after notifying
+  file:
+    path: "{{ ansible_state_dir }}/last_pull_failed"
+    state: absent
+  when: failure_sentinel.stat.exists
+
+# ---------------------------------------------------------------------------
+# Send a success notification after a long silence (optional).
+# Only fires if a failure was previously acknowledged.
+# Uncomment if you want a positive confirmation that sync is healthy.
+# ---------------------------------------------------------------------------
+# - name: Send success notification
+#   command: >
+#     termux-notification
+#     --id 1001
+#     --title "ansible-pull OK on {{ device_label }}"
+#     --content "Last sync: {{ ansible_date_time.iso8601 }}"
+#     --priority low
+#   when: not failure_sentinel.stat.exists

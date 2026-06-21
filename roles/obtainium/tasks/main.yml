@@ -1,0 +1,49 @@
+---
+# =============================================================================
+# roles/obtainium/tasks/main.yml — manage Obtainium app list
+#
+# Obtainium is a declarative app manager for Android that installs and updates
+# apps from GitHub releases, F-Droid, APKMirror, and other sources.
+# It stores its app list as a JSON file that we manage via Ansible.
+#
+# Workflow:
+#   1. Ensure the Obtainium data directory exists on the device.
+#   2. Push the per-device apps.json from files/obtainium/<device>_apps.json.
+#   3. Obtainium picks up the new list automatically on its next launch or
+#      background check — no ADB or root required.
+#
+# To update the app list: edit files/obtainium/<device>_apps.json in the repo
+# and push. The device will have the new list within the hour.
+# =============================================================================
+
+# ---------------------------------------------------------------------------
+# The Obtainium data directory on Android (accessible from Termux).
+# This path is standard for Obtainium installed from F-Droid.
+# ---------------------------------------------------------------------------
+- name: Set Obtainium data path
+  set_fact:
+    obtainium_data_dir: "/sdcard/Android/data/dev.imranr.obtainium/files"
+  # If Obtainium is installed as a different package ID, update this path.
+
+- name: Ensure Obtainium data directory exists
+  file:
+    path: "{{ obtainium_data_dir }}"
+    state: directory
+    mode: "0755"
+  # This may fail if Obtainium has never been opened yet — open the app once
+  # manually after first install so Android creates the data directory.
+
+- name: Push per-device Obtainium app list
+  copy:
+    src: "{{ playbook_dir }}/files/obtainium/{{ obtainium_config }}"
+    dest: "{{ obtainium_data_dir }}/app_list.json"
+    mode: "0644"
+  # Only marks changed if the file content differs — idempotent.
+  notify: Remind to refresh Obtainium
+
+- name: Log Obtainium config deployment
+  lineinfile:
+    path: "{{ ansible_log_file }}"
+    line: "{{ ansible_date_time.iso8601 }} | {{ device_label }} | obtainium config pushed"
+    create: true
+  when: not ansible_check_mode

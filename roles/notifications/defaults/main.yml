@@ -1,0 +1,11 @@
+---
+# =============================================================================
+# roles/notifications/defaults/main.yml
+# =============================================================================
+
+# Notification priority for failure alerts.
+# Options: min, low, default, high, max
+notification_priority: "high"
+
+# Channel ID for Termux notifications (appears in Android notification settings).
+notification_channel: "ansible-pull"

@@ -1,0 +1,15 @@
+# =============================================================================
+# files/packages/grapheneos.txt
+#
+# Additional packages for GrapheneOS devices. These are referenced in
+# host_vars/p8p.yml under `extra_packages` rather than loaded automatically.
+# This file is for documentation/reference — to add packages to p8p, edit
+# `extra_packages` in host_vars/p8p.yml.
+# =============================================================================
+
+# termux-api        # Termux:API bridge (app must also be installed from F-Droid)
+# syncthing         # Syncthing file sync daemon
+# ripgrep           # Fast grep replacement
+# fd                # Fast find replacement
+# bat               # Syntax-highlighted cat
+# neovim            # Modern vim

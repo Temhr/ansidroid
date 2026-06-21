@@ -1,0 +1,114 @@
+---
+# =============================================================================
+# roles/common/tasks/packages.yml — safe package update and upgrade
+#
+# Design goals:
+#   - Idempotent: safe to re-run every hour without side effects
+#   - Non-fatal: upgrade failures are logged but do not abort the playbook
+#   - Auditable: every attempt is timestamped in upgrade.log
+#   - Flexible: behaviour controlled by `upgrade_strategy` in host_vars
+#
+# Upgrade strategies:
+#   conservative  →  pkg upgrade --no-full-upgrade  (safest; p8p, p3axl)
+#   full          →  pkg upgrade                    (all or nothing; pxl)
+#   skip          →  never upgrades existing pkgs   (legacy hardware; n5x)
+# =============================================================================
+
+# ---------------------------------------------------------------------------
+# Read and merge package lists
+# ---------------------------------------------------------------------------
+- name: Read common package list from file
+  set_fact:
+    common_pkg_list: >-
+      {{
+        lookup('file', common_packages_file)
+        .splitlines()
+        | reject('match', '^#')
+        | reject('equalto', '')
+        | list
+      }}
+  # Strips comment lines (starting with #) and blank lines.
+
+- name: Merge common and device-specific package lists
+  set_fact:
+    all_packages: "{{ common_pkg_list + (extra_packages | default([])) }}"
+  # extra_packages is defined per-device in host_vars/<device>.yml.
+
+# ---------------------------------------------------------------------------
+# Package index update (always runs — needed even for 'skip' strategy)
+# ---------------------------------------------------------------------------
+- name: Update Termux package index
+  command: pkg update -y
+  register: pkg_update_result
+  changed_when: "'Get:' in pkg_update_result.stdout"
+  failed_when: pkg_update_result.rc != 0
+
+# ---------------------------------------------------------------------------
+# Pre-upgrade snapshot for manual diffing if something breaks
+# ---------------------------------------------------------------------------
+- name: Snapshot installed packages before upgrade
+  shell: pkg list-installed 2>/dev/null > {{ pkg_state_file }}
+  changed_when: false
+  when: upgrade_strategy != 'skip'
+
+# ---------------------------------------------------------------------------
+# Conservative upgrade (p8p, p3axl) — avoids removing packages
+# ---------------------------------------------------------------------------
+- name: Upgrade packages (conservative)
+  command: pkg upgrade -y --no-full-upgrade
+  register: pkg_upgrade_result
+  when: upgrade_strategy == 'conservative'
+  failed_when: false
+  changed_when: "'upgraded' in (pkg_upgrade_result.stdout | default(''))"
+
+# ---------------------------------------------------------------------------
+# Full upgrade (pxl) — upgrades everything including dependency changes
+# ---------------------------------------------------------------------------
+- name: Upgrade packages (full)
+  command: pkg upgrade -y
+  register: pkg_upgrade_result
+  when: upgrade_strategy == 'full'
+  failed_when: false
+  changed_when: "'upgraded' in (pkg_upgrade_result.stdout | default(''))"
+
+# ---------------------------------------------------------------------------
+# Install all required packages (runs for all strategies including 'skip')
+# pkg install is idempotent — already-installed packages are skipped.
+# ---------------------------------------------------------------------------
+- name: Install all required packages
+  command: pkg install -y {{ item }}
+  loop: "{{ all_packages }}"
+  register: pkg_install_results
+  failed_when: false
+  changed_when: "'Installing' in pkg_install_results.stdout"
+
+# ---------------------------------------------------------------------------
+# Audit log
+# ---------------------------------------------------------------------------
+- name: Log upgrade result with timestamp
+  lineinfile:
+    path: "{{ upgrade_log_file }}"
+    line: >-
+      {{ ansible_date_time.iso8601 }}
+      | {{ device_label }}
+      | strategy={{ upgrade_strategy }}
+      | rc={{ pkg_upgrade_result.rc | default('skipped') }}
+    create: true
+
+# ---------------------------------------------------------------------------
+# Sanity check — verify Ansible still works after upgrade
+# A pkg upgrade can occasionally clobber a Python dep that Ansible needs.
+# We do not abort; we emit a visible warning so you can SSH in and fix it.
+# ---------------------------------------------------------------------------
+- name: Verify ansible binary still works post-upgrade
+  command: ansible --version
+  register: ansible_check
+  failed_when: false
+  changed_when: false
+
+- name: Warn if ansible is broken after upgrade
+  debug:
+    msg: >
+      WARNING: `ansible --version` failed on {{ device_label }}.
+      Ansible may need reinstalling. Run in Termux: pkg install -y ansible
+  when: ansible_check.rc != 0

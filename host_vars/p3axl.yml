@@ -1,0 +1,23 @@
+---
+# =============================================================================
+# host_vars/p3axl.yml — Pixel 3a XL (LineageOS) — secondary device
+# =============================================================================
+
+device_name: p3axl
+device_label: "Pixel 3a XL"
+os_group: lineageos
+
+# Set to true if this device runs LineageOS for microG build.
+has_microg: false
+
+# Set to true if Magisk is installed.
+has_root: false
+
+upgrade_strategy: conservative
+max_upgrade_failures: 3
+
+extra_packages:
+  - ripgrep
+  - neovim
+
+obtainium_config: "p3axl_apps.json"

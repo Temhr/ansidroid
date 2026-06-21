@@ -1,0 +1,13 @@
+---
+# =============================================================================
+# roles/common/defaults/main.yml
+#
+# Lowest-priority defaults for the common role. Overridden by group_vars,
+# host_vars, or -e flags passed to ansible-pull.
+# =============================================================================
+
+# Path to the common package list applied to every device.
+common_packages_file: "{{ playbook_dir }}/files/packages/common.txt"
+
+# Directory where Ansible keeps state, logs, and device identity.
+ansible_state_dir: "{{ ansible_env.HOME }}/.ansible"

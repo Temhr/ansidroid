@@ -1,0 +1,27 @@
+# =============================================================================
+# files/packages/common.txt — Termux packages installed on every device
+#
+# Format: one package per line. Lines starting with # are ignored.
+# This list is merged with `extra_packages` from each device's host_vars.
+#
+# To add a package to a specific device only, add it to host_vars/<device>.yml
+# under `extra_packages` rather than here.
+# =============================================================================
+
+# --- Core toolchain (required for ansible-pull to function) ----------------
+git
+python
+ansible
+cronie          # cron daemon — runs the hourly ansible-pull loop
+
+# --- Shell utilities -------------------------------------------------------
+curl
+wget
+openssh         # ssh client + sshd (useful for remote access into Termux)
+gnupg           # GPG for verifying signatures
+rsync           # file sync utility (used by Syncthing fallback scripts)
+jq              # JSON processor (used to inspect Obtainium configs)
+vim
+
+# --- Debugging and diagnostics ---------------------------------------------
+htop

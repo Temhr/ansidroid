@@ -1,0 +1,172 @@
+#!/data/data/com.termux/files/usr/bin/bash
+# =============================================================================
+# bootstrap.sh — Run once per device to initialise the ansible-pull setup.
+#
+# Usage:
+#   bash bootstrap.sh <device_handle>
+#
+# Device handles:
+#   p8p    Pixel 8 Pro    (GrapheneOS)
+#   p3axl  Pixel 3a XL   (LineageOS)
+#   pxl    Pixel XL      (LineageOS)
+#   n5x    Nexus 5X      (Android)
+#
+# What this script does:
+#   1. Validates the device handle argument.
+#   2. Updates and upgrades Termux packages.
+#   3. Installs git, python, ansible, cronie, openssh.
+#   4. Generates a per-device SSH deploy key (ed25519).
+#   5. Writes the device identity file (~/.ansible/device_vars.yml).
+#   6. Prompts you to add the public key to GitHub as a read-only deploy key.
+#   7. Runs the first ansible-pull, which installs the cron job and all roles.
+#
+# After this script completes, everything is self-managing. You only need to
+# run this once per physical device.
+# =============================================================================
+
+set -euo pipefail
+
+# ---------------------------------------------------------------------------
+# Configuration — update REPO to your actual GitHub URL before running.
+# ---------------------------------------------------------------------------
+REPO="git@github.com:temhr/ansidroid.git"
+ANSIBLE_DIR="$HOME/.ansible"
+DEPLOY_KEY="$HOME/.ssh/ansible_deploy"
+VAULT_PASS_FILE="$ANSIBLE_DIR/.vault_pass"
+
+# ---------------------------------------------------------------------------
+# Validate argument
+# ---------------------------------------------------------------------------
+VALID_HANDLES="p8p p3axl pxl n5x"
+DEVICE_NAME="${1:-}"
+
+if [[ -z "$DEVICE_NAME" ]]; then
+  echo "ERROR: No device handle provided."
+  echo "Usage: bash bootstrap.sh <device_handle>"
+  echo "Valid handles: $VALID_HANDLES"
+  exit 1
+fi
+
+if ! echo "$VALID_HANDLES" | grep -qw "$DEVICE_NAME"; then
+  echo "ERROR: Unknown device handle '$DEVICE_NAME'."
+  echo "Valid handles: $VALID_HANDLES"
+  exit 1
+fi
+
+echo "==> Bootstrapping device: $DEVICE_NAME"
+
+# ---------------------------------------------------------------------------
+# Step 1: Update Termux package index and upgrade existing packages.
+# We do a conservative upgrade here (no full-upgrade) to avoid breaking
+# core Termux utilities before Ansible is even installed.
+# ---------------------------------------------------------------------------
+echo "==> Updating Termux package index..."
+pkg update -y
+
+echo "==> Upgrading existing packages (conservative)..."
+pkg upgrade -y --no-full-upgrade || {
+  echo "WARN: Conservative upgrade had issues; continuing anyway."
+}
+
+# ---------------------------------------------------------------------------
+# Step 2: Install required packages.
+# ---------------------------------------------------------------------------
+echo "==> Installing bootstrap dependencies..."
+pkg install -y git python ansible cronie openssh
+
+# ---------------------------------------------------------------------------
+# Step 3: Create the Ansible working directory.
+# ---------------------------------------------------------------------------
+mkdir -p "$ANSIBLE_DIR"
+chmod 700 "$ANSIBLE_DIR"
+
+# ---------------------------------------------------------------------------
+# Step 4: Generate an SSH deploy key for this device.
+# This key will be used to clone the private GitHub repo via SSH.
+# It should be added to GitHub as a read-only deploy key.
+# ---------------------------------------------------------------------------
+if [[ ! -f "$DEPLOY_KEY" ]]; then
+  echo "==> Generating SSH deploy key..."
+  ssh-keygen -t ed25519 -f "$DEPLOY_KEY" -N "" -C "ansible-pull-${DEVICE_NAME}"
+else
+  echo "==> SSH deploy key already exists, skipping generation."
+fi
+
+# Configure SSH to use this key for GitHub.
+mkdir -p "$HOME/.ssh"
+chmod 700 "$HOME/.ssh"
+cat >> "$HOME/.ssh/config" << SSHCONF
+
+# Added by ansidroid bootstrap
+Host github.com
+  IdentityFile ${DEPLOY_KEY}
+  StrictHostKeyChecking accept-new
+SSHCONF
+
+echo ""
+echo "==========================================================="
+echo "  ACTION REQUIRED: Add this deploy key to your GitHub repo"
+echo "  Settings → Deploy keys → Add deploy key (read-only)"
+echo "==========================================================="
+cat "${DEPLOY_KEY}.pub"
+echo "==========================================================="
+echo ""
+read -rp "Press ENTER once you have added the key to GitHub... "
+
+# ---------------------------------------------------------------------------
+# Step 5: Write the device identity file.
+# This file is sourced by every subsequent ansible-pull run so the playbook
+# knows which host_vars and groups to apply.
+# ---------------------------------------------------------------------------
+echo "==> Writing device identity to $ANSIBLE_DIR/device_vars.yml..."
+cat > "$ANSIBLE_DIR/device_vars.yml" << VARS
+# Auto-generated by bootstrap.sh — do not edit manually.
+# To change device identity, re-run bootstrap.sh.
+device_name: ${DEVICE_NAME}
+VARS
+
+# ---------------------------------------------------------------------------
+# Step 6: Create a placeholder vault password file.
+# Replace the contents with your real vault password if you use ansible-vault.
+# The file must exist even if vault is not yet configured.
+# ---------------------------------------------------------------------------
+if [[ ! -f "$VAULT_PASS_FILE" ]]; then
+  echo "==> Creating placeholder vault password file at $VAULT_PASS_FILE"
+  echo "CHANGE_ME" > "$VAULT_PASS_FILE"
+  chmod 600 "$VAULT_PASS_FILE"
+  echo "WARN: Set the correct vault password in $VAULT_PASS_FILE before using secrets."
+fi
+
+# ---------------------------------------------------------------------------
+# Step 7: Install the run-pull wrapper now (before first pull) so that
+# any manual trigger during the pull itself doesn't fail.
+# ansible-pull will overwrite this with the templated version.
+# ---------------------------------------------------------------------------
+cat > "$ANSIBLE_DIR/run-pull.sh" << PULLSCRIPT
+#!/data/data/com.termux/files/usr/bin/bash
+ansible-pull \\
+  -U "${REPO}" \\
+  -i localhost, \\
+  -e "@\$HOME/.ansible/device_vars.yml" \\
+  --vault-password-file "\$HOME/.ansible/.vault_pass" \\
+  >> "\$HOME/.ansible/ansible-pull.log" 2>&1
+PULLSCRIPT
+chmod +x "$ANSIBLE_DIR/run-pull.sh"
+
+# ---------------------------------------------------------------------------
+# Step 8: Run the first ansible-pull.
+# This applies all roles including the cron role, which installs the
+# recurring hourly job. After this, the device is self-managing.
+# ---------------------------------------------------------------------------
+echo "==> Running initial ansible-pull..."
+ansible-pull \
+  -U "$REPO" \
+  -i localhost, \
+  -e "@$ANSIBLE_DIR/device_vars.yml" \
+  --vault-password-file "$VAULT_PASS_FILE"
+
+echo ""
+echo "==> Bootstrap complete for $DEVICE_NAME."
+echo "    Ansible will now pull from GitHub every hour automatically."
+echo "    To trigger a manual run: ~/.ansible/run-pull.sh"
+echo "    Logs: ~/.ansible/ansible-pull.log"

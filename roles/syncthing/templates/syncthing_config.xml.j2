@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Syncthing configuration — managed by ansible-pull
+  Device: {{ device_label }} ({{ device_name }})
+  Do not edit manually — changes will be overwritten on the next pull.
+  To customise, edit roles/syncthing/templates/syncthing_config.xml.j2
+-->
+<configuration version="35">
+    <folder id="ansible-config" label="Ansible Config" path="{{ ansible_env.HOME }}/.ansible" type="sendreceive" rescanIntervalS="3600" fsWatcherEnabled="true" fsWatcherDelayS="10">
+        <!--
+          Syncs the entire ~/.ansible directory (excluding the vault password file).
+          Add your other device IDs here once you have them.
+          Get a device ID by running: syncthing --device-id
+        -->
+        <!-- <device id="YOUR-OTHER-DEVICE-ID-HERE" introducedBy=""></device> -->
+    </folder>
+    <folder id="termux-home" label="Termux Home Dotfiles" path="{{ ansible_env.HOME }}" type="sendreceive" rescanIntervalS="3600" fsWatcherEnabled="true" fsWatcherDelayS="10">
+        <!-- Syncs dotfiles. Be careful with this — don't sync sensitive files. -->
+        <!-- <device id="YOUR-OTHER-DEVICE-ID-HERE" introducedBy=""></device> -->
+    </folder>
+    <gui enabled="true" tls="true" debugging="false">
+        <!-- Syncthing web UI — accessible at https://localhost:8384 -->
+        <address>127.0.0.1:8384</address>
+        <!-- Set an API key here or generate one via the Syncthing UI -->
+        <apikey>{{ vault_syncthing_api_key | default('CHANGE_ME_IN_VAULT') }}</apikey>
+        <theme>default</theme>
+    </gui>
+    <options>
+        <listenAddress>default</listenAddress>
+        <globalAnnounceEnabled>true</globalAnnounceEnabled>
+        <localAnnounceEnabled>true</localAnnounceEnabled>
+        <relaysEnabled>true</relaysEnabled>
+        <!-- Limit bandwidth to avoid impacting mobile data -->
+        <maxSendKbps>0</maxSendKbps>
+        <maxRecvKbps>0</maxRecvKbps>
+        <reconnectionIntervalS>60</reconnectionIntervalS>
+        <startBrowser>false</startBrowser>
+        <natEnabled>true</natEnabled>
+        <autoUpgradeIntervalH>0</autoUpgradeIntervalH>
+    </options>
+</configuration>

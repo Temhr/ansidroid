@@ -1,0 +1,23 @@
+---
+# =============================================================================
+# roles/common/tasks/main.yml — entry point for the common role
+#
+# Runs on every device on every pull. Includes sub-task files in order.
+# =============================================================================
+
+- name: Ensure ansible state directory exists
+  file:
+    path: "{{ ansible_state_dir }}"
+    state: directory
+    mode: "0700"
+  # Mode 0700: only the Termux user can read this directory.
+  # It contains the vault password file and device identity.
+
+- name: Apply package management
+  include_tasks: packages.yml
+
+- name: Apply dotfiles
+  include_tasks: dotfiles.yml
+
+- name: Apply logging configuration
+  include_tasks: logging.yml

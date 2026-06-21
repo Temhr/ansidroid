@@ -1,0 +1,26 @@
+---
+# =============================================================================
+# roles/common/tasks/logging.yml — log rotation
+#
+# ansible-pull runs hourly forever. Without rotation, ansible-pull.log grows
+# indefinitely. This installs a nightly cron to trim it to `log_max_lines`.
+# =============================================================================
+
+- name: Ensure ansible-pull log file exists
+  file:
+    path: "{{ ansible_log_file }}"
+    state: touch
+    mode: "0644"
+    modification_time: preserve
+    access_time: preserve
+
+- name: Install nightly log rotation cron job
+  cron:
+    name: "Rotate ansible-pull.log"
+    hour: "3"
+    minute: "15"
+    job: >
+      tail -n {{ log_max_lines }} {{ ansible_log_file }}
+      > {{ ansible_log_file }}.tmp
+      && mv {{ ansible_log_file }}.tmp {{ ansible_log_file }}
+  # Uses tmp file + atomic mv to avoid data loss if crond kills a slow write.

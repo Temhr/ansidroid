@@ -1,0 +1,11 @@
+# =============================================================================
+# inventory — static inventory for ansible-pull
+#
+# ansible-pull always runs against localhost. We never SSH to the device from
+# the outside; the device connects to GitHub and runs Ansible on itself.
+#
+# The `-i localhost,` flag passed to ansible-pull achieves the same thing,
+# but this file exists as a fallback and for documentation clarity.
+# =============================================================================
+[local]
+localhost ansible_connection=local

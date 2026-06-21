@@ -1,0 +1,6 @@
+# =============================================================================
+# files/packages/android.txt — reference for stock Android extra packages
+# n5x uses upgrade_strategy: skip, so keep extras minimal to reduce risk.
+# =============================================================================
+
+# (intentionally minimal — add to host_vars/n5x.yml extra_packages if needed)

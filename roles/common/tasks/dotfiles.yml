@@ -1,0 +1,23 @@
+---
+# =============================================================================
+# roles/common/tasks/dotfiles.yml — deploy shell configuration
+#
+# Renders .bashrc from a Jinja2 template that embeds device-specific values
+# (device name, label, OS group) into the shell prompt and environment.
+# =============================================================================
+
+- name: Deploy .bashrc from template
+  template:
+    src: bashrc.j2
+    dest: "{{ ansible_env.HOME }}/.bashrc"
+    mode: "0644"
+    backup: true
+  # backup: true keeps .bashrc~ — useful if a bad template breaks your shell.
+
+- name: Deploy .profile (ensures .bashrc loads in login shells)
+  copy:
+    dest: "{{ ansible_env.HOME }}/.profile"
+    mode: "0644"
+    content: |
+      # Managed by ansible-pull — do not edit manually.
+      [ -f "$HOME/.bashrc" ] && . "$HOME/.bashrc"
