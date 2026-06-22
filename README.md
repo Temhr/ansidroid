@@ -49,13 +49,13 @@ ansidroid/
 │   ansible.cfg                     tuned for Termux (log path, no retry files)
 │   inventory                       targets localhost only — the device provisions itself
 │
-├── host_vars/                      LAYER 1 — per-device identity and overrides
+├── host_vars/                      per-device identity and overrides
 │   ├── p8p.yml                     conservative upgrades · syncthing + notifications
 │   ├── p3axl.yml                   conservative upgrades
 │   ├── pxl.yml                     full upgrade strategy
 │   └── n5x.yml                     skip upgrades · minimal packages
 │
-├── group_vars/                     LAYER 2 — shared OS-level defaults (host_vars takes precedence)
+├── group_vars/                     shared OS-level defaults (host_vars takes precedence)
 │   ├── all/
 │   │   ├── main.yml                universal vars: repo URL, log paths, cron timing
 │   │   └── vault.yml               encrypted secrets via ansible-vault (API keys, passwords)
@@ -63,7 +63,7 @@ ansidroid/
 │   ├── lineageos.yml               root and MicroG off by default; override in host_vars
 │   └── android.yml                 upgrade_strategy: skip, minimal feature set
 │
-├── roles/                          LAYER 3 — idempotent units of work, safe to run hourly
+├── roles/                          idempotent units of work, safe to run hourly
 │   ├── common/                     all runs, each device, every pull
 │   │   ├── tasks/
 │   │   │   ├── main.yml            calls the three sub-task files in order
@@ -99,7 +99,7 @@ ansidroid/
 │       ├── tasks/main.yml          fires on pull failure; clears sentinel on success
 │       └── defaults/main.yml
 │
-└── files/                          LAYER 4 — static assets copied verbatim to devices
+└── files/                          static assets copied verbatim to devices
     ├── packages/
     │   ├── common.txt              every device: git python ansible cronie openssh …
     │   ├── grapheneos.txt          ref list for p8p extras (add to host_vars extra_packages)
