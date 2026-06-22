@@ -44,30 +44,30 @@ YOU (any machine)
 
 ```
 ansidroid/
-│   local.yml                       ansible-pull entry point; runs roles conditionally by OS group
-│   bootstrap.sh                    run once per device; installs deps, writes identity, fires first pull
-│   ansible.cfg                     Ansible settings tuned for Termux (log path, no retry files)
+│   local.yml                       entry point; runs roles conditionally by OS group
+│   bootstrap.sh                    single use; installs deps, writes identity, fires first pull
+│   ansible.cfg                     tuned for Termux (log path, no retry files)
 │   inventory                       targets localhost only — the device provisions itself
 │
 ├── host_vars/                      LAYER 1 — per-device identity and overrides
-│   ├── p8p.yml                     Pixel 8 Pro   · GrapheneOS · conservative upgrades · syncthing + notifications
-│   ├── p3axl.yml                   Pixel 3a XL  · LineageOS  · conservative upgrades
-│   ├── pxl.yml                     Pixel XL     · LineageOS  · full upgrade strategy
-│   └── n5x.yml                     Nexus 5X     · Android    · skip upgrades · minimal packages
+│   ├── p8p.yml                     conservative upgrades · syncthing + notifications
+│   ├── p3axl.yml                   conservative upgrades
+│   ├── pxl.yml                     full upgrade strategy
+│   └── n5x.yml                     skip upgrades · minimal packages
 │
 ├── group_vars/                     LAYER 2 — shared OS-level defaults (host_vars takes precedence)
 │   ├── all/
-│   │   ├── main.yml                vars for every device: repo URL, log paths, cron timing
+│   │   ├── main.yml                universal vars: repo URL, log paths, cron timing
 │   │   └── vault.yml               encrypted secrets via ansible-vault (API keys, passwords)
 │   ├── grapheneos.yml              syncthing on, notifications on, no GMS by default
 │   ├── lineageos.yml               root and MicroG off by default; override in host_vars
 │   └── android.yml                 upgrade_strategy: skip, minimal feature set
 │
-├── roles/                          LAYER 3 — idempotent units of work, safe to re-run hourly
-│   ├── common/                     runs on every device every pull
+├── roles/                          LAYER 3 — idempotent units of work, safe to run hourly
+│   ├── common/                     all runs, each device, every pull
 │   │   ├── tasks/
 │   │   │   ├── main.yml            calls the three sub-task files in order
-│   │   │   ├── packages.yml        update index · upgrade (per strategy) · install packages · verify ansible
+│   │   │   ├── packages.yml        update index · upgrade & install pkgs · verify ansible
 │   │   │   ├── dotfiles.yml        render .bashrc with device name in prompt
 │   │   │   └── logging.yml         nightly cron to trim ansible-pull.log to last 500 lines
 │   │   ├── templates/
@@ -75,39 +75,39 @@ ansidroid/
 │   │   └── defaults/main.yml
 │   │
 │   ├── cron/                       installs the self-updating hourly loop
-│   │   ├── tasks/main.yml          deploys run-pull.sh · staggered cron job · Termux:Boot crond script
+│   │   ├── tasks/main.yml          deploys run-pull.sh · Termux:Boot crond script
 │   │   └── templates/
 │   │       └── run-pull.sh.j2      ansible-pull wrapper with lockfile guard and retry logic
 │   │
 │   ├── obtainium/                  manages per-device app list
-│   │   └── tasks/main.yml          pushes files/obtainium/<device>_apps.json to Obtainium data dir
+│   │   └── tasks/main.yml          pushes files/obtainium/<device>_apps.json to data dir
 │   │
 │   ├── syncthing/                  deploys Syncthing — p8p only
-│   │   ├── tasks/main.yml          writes config, installs boot script, starts daemon if stopped
+│   │   ├── tasks/main.yml          writes config, installs boot script, restarts daemon
 │   │   └── templates/
 │   │       └── syncthing_config.xml.j2     folder definitions + API key from vault
 │   │
 │   ├── grapheneos/                 p8p only
-│   │   ├── tasks/main.yml          writes manual-step checklist (PIN, DNS, auto-reboot); checks Termux:API
+│   │   ├── tasks/main.yml          writes manual-step checklist (PIN, DNS, auto-reboot)
 │   │   └── defaults/main.yml
 │   │
 │   ├── lineageos/                  p3axl and pxl
-│   │   ├── tasks/main.yml          detects su and MicroG; warns if host_vars disagrees with reality
+│   │   ├── tasks/main.yml          detects su and MicroG; warns if host_vars disagrees
 │   │   └── defaults/main.yml
 │   │
 │   └── notifications/              p8p only (requires Termux:API)
-│       ├── tasks/main.yml          fires Android notification on pull failure; clears sentinel on success
+│       ├── tasks/main.yml          fires on pull failure; clears sentinel on success
 │       └── defaults/main.yml
 │
 └── files/                          LAYER 4 — static assets copied verbatim to devices
     ├── packages/
-    │   ├── common.txt              installed on every device: git python ansible cronie openssh …
-    │   ├── grapheneos.txt          reference list for p8p extras (add to host_vars extra_packages)
-    │   ├── lineageos.txt           reference list for p3axl/pxl extras
+    │   ├── common.txt              every device: git python ansible cronie openssh …
+    │   ├── grapheneos.txt          ref list for p8p extras (add to host_vars extra_packages)
+    │   ├── lineageos.txt           ref list for p3axl/pxl extras
     │   └── android.txt             (intentionally minimal)
     └── obtainium/
         ├── p8p_apps.json           per-device app lists in Obtainium's native export format
-        ├── p3axl_apps.json         edit and push to add/remove apps; device picks up within the hour
+        ├── p3axl_apps.json         edit to add/remove apps; device picks up within the hour
         ├── pxl_apps.json
         └── n5x_apps.json
 ```
