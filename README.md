@@ -45,7 +45,7 @@ YOU (any machine)
 ```
 ansidroid/
 │   local.yml                       entry point; runs roles conditionally by OS group
-│   bootstrap.sh                    single use; installs deps, writes identity, fires first pull
+│   bootstrap.sh                    initial; installs deps, writes identity, fires first pull
 │   ansible.cfg                     tuned for Termux (log path, no retry files)
 │   inventory                       targets localhost only — the device provisions itself
 │
