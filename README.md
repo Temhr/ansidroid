@@ -44,10 +44,10 @@ YOU (any machine)
 
 ```
 ansidroid/
-│   local.yml                       entry point; runs roles conditionally by OS group
-│   bootstrap.sh                    initial; installs deps, writes identity, fires first pull
-│   ansible.cfg                     tuned for Termux (log path, no retry files)
-│   inventory                       targets localhost only — the device provisions itself
+├── local.yml                       entry point; runs roles conditionally by OS group
+├── bootstrap.sh                    initial; installs deps, writes identity, fires first pull
+├── ansible.cfg                     tuned for Termux (log path, no retry files)
+├── inventory                       targets localhost only — the device provisions itself
 │
 ├── host_vars/                      per-device identity and overrides
 │   ├── p8p.yml                     conservative upgrades · syncthing + notifications
