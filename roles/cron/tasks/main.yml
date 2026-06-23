@@ -1,63 +1,63 @@
 ---
 # =============================================================================
 # roles/cron/tasks/main.yml — install and maintain the ansible-pull loop
-#
-# This role is responsible for:
-#   1. Deploying the run-pull.sh wrapper script (lockfile, retry logic).
-#   2. Installing the hourly cron job that calls run-pull.sh.
-#   3. Installing a Termux:Boot script so crond restarts after reboot.
-#
-# The cron minute is seeded from device_name so each device in the fleet
-# runs at a different minute, avoiding a thundering herd on GitHub.
 # =============================================================================
 
-# ---------------------------------------------------------------------------
-# run-pull.sh — wrapper around ansible-pull with lockfile and retry logic.
-# If two cron triggers overlap (e.g. a slow pull), the second exits early
-# rather than running two concurrent Ansible processes.
-# ---------------------------------------------------------------------------
-- name: Deploy run-pull.sh wrapper script from template
-  template:
-    src: run-pull.sh.j2
-    dest: "{{ ansible_state_dir }}/run-pull.sh"
-    mode: "0755"
-  # Template fills in REPO URL, device name, vault path, etc.
+- name: Deploy run-pull.sh wrapper script
+  block:
+    - name: Render run-pull.sh from template
+      template:
+        src: run-pull.sh.j2
+        dest: "{{ ansible_state_dir }}/run-pull.sh"
+        mode: "0755"
+  rescue:
+    - name: Log run-pull.sh deploy failure
+      lineinfile:
+        path: "{{ ansible_log_file }}"
+        line: "{{ ansible_date_time.iso8601 }} | {{ device_label }} | ERROR: failed to deploy run-pull.sh — {{ ansible_failed_result.msg | default('unknown') }}"
+        create: true
+  # If this fails the existing run-pull.sh (from a previous pull) stays in
+  # place, so the cron loop continues working on the old version.
 
-# ---------------------------------------------------------------------------
-# Hourly cron job — the core of the self-updating loop.
-# minute is deterministically derived from device_name so devices stagger.
-# Example: p8p → minute 7, p3axl → minute 43, etc. (varies by hash seed)
-# ---------------------------------------------------------------------------
 - name: Install hourly ansible-pull cron job
-  cron:
-    name: "ansible-pull hourly sync"
-    hour: "{{ cron_hour }}"
-    minute: "{{ 59 | random(seed=device_name) }}"
-    job: >
-      {{ ansible_state_dir }}/run-pull.sh
-      >> {{ ansible_log_file }} 2>&1
-  # Appends stdout+stderr to ansible-pull.log. Log rotation in common role
-  # prevents this file from growing unbounded.
+  block:
+    - name: Add cron entry
+      cron:
+        name: "ansible-pull hourly sync"
+        hour: "{{ cron_hour }}"
+        minute: "{{ 59 | random(seed=device_name) }}"
+        job: >
+          {{ ansible_state_dir }}/run-pull.sh
+          >> {{ ansible_log_file }} 2>&1
+  rescue:
+    - name: Log cron install failure
+      lineinfile:
+        path: "{{ ansible_log_file }}"
+        line: "{{ ansible_date_time.iso8601 }} | {{ device_label }} | ERROR: failed to install cron job — {{ ansible_failed_result.msg | default('unknown') }}"
+        create: true
 
-# ---------------------------------------------------------------------------
-# Termux:Boot integration — crond does not survive a reboot unless we add
-# a boot script. Termux:Boot runs all scripts in ~/.termux/boot/ at startup.
-#
-# IMPORTANT: The Termux:Boot app must be installed from F-Droid and opened
-# at least once to activate the boot permission.
-# ---------------------------------------------------------------------------
-- name: Ensure Termux boot directory exists
-  file:
-    path: "{{ ansible_env.HOME }}/.termux/boot"
-    state: directory
-    mode: "0755"
+- name: Configure Termux:Boot crond start script
+  block:
+    - name: Ensure Termux boot directory exists
+      file:
+        path: "{{ ansible_env.HOME }}/.termux/boot"
+        state: directory
+        mode: "0755"
 
-- name: Install crond boot script for Termux:Boot
-  copy:
-    dest: "{{ ansible_env.HOME }}/.termux/boot/start-crond.sh"
-    mode: "0755"
-    content: |
-      #!/data/data/com.termux/files/usr/bin/sh
-      # Managed by ansible-pull (roles/cron) — do not edit manually.
-      # Started automatically by Termux:Boot on device startup.
-      crond
+    - name: Install crond boot script
+      copy:
+        dest: "{{ ansible_env.HOME }}/.termux/boot/start-crond.sh"
+        mode: "0755"
+        content: |
+          #!/data/data/com.termux/files/usr/bin/sh
+          # Managed by ansible-pull (roles/cron) — do not edit manually.
+          crond
+
+  rescue:
+    - name: Log Termux:Boot setup failure
+      lineinfile:
+        path: "{{ ansible_log_file }}"
+        line: "{{ ansible_date_time.iso8601 }} | {{ device_label }} | ERROR: Termux:Boot script setup failed — crond will not start on reboot — {{ ansible_failed_result.msg | default('unknown') }}"
+        create: true
+  # Termux:Boot app must be installed and opened at least once.
+  # If it isn't, the directory write may fail — logged but not fatal.

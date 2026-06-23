@@ -1,23 +1,30 @@
 ---
 # =============================================================================
 # roles/common/tasks/dotfiles.yml — deploy shell configuration
-#
-# Renders .bashrc from a Jinja2 template that embeds device-specific values
-# (device name, label, OS group) into the shell prompt and environment.
 # =============================================================================
 
-- name: Deploy .bashrc from template
-  template:
-    src: bashrc.j2
-    dest: "{{ ansible_env.HOME }}/.bashrc"
-    mode: "0644"
-    backup: true
-  # backup: true keeps .bashrc~ — useful if a bad template breaks your shell.
+- name: Deploy dotfiles
+  block:
+    - name: Deploy .bashrc from template
+      template:
+        src: bashrc.j2
+        dest: "{{ ansible_env.HOME }}/.bashrc"
+        mode: "0644"
+        backup: true   # keeps .bashrc~ so a bad template is recoverable
 
-- name: Deploy .profile (ensures .bashrc loads in login shells)
-  copy:
-    dest: "{{ ansible_env.HOME }}/.profile"
-    mode: "0644"
-    content: |
-      # Managed by ansible-pull — do not edit manually.
-      [ -f "$HOME/.bashrc" ] && . "$HOME/.bashrc"
+    - name: Deploy .profile
+      copy:
+        dest: "{{ ansible_env.HOME }}/.profile"
+        mode: "0644"
+        content: |
+          # Managed by ansible-pull — do not edit manually.
+          [ -f "$HOME/.bashrc" ] && . "$HOME/.bashrc"
+
+  rescue:
+    - name: Log dotfiles failure
+      lineinfile:
+        path: "{{ ansible_log_file }}"
+        line: "{{ ansible_date_time.iso8601 }} | {{ device_label }} | ERROR: dotfiles role failed — {{ ansible_failed_result.msg | default('unknown') }} — existing .bashrc unchanged"
+        create: true
+  # On failure the existing .bashrc is left in place (backup: true ensures
+  # the previous version is preserved as .bashrc~).

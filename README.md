@@ -183,3 +183,121 @@ Reference vault vars in playbooks as `{{ vault_some_secret }}`.
 | `~/.ansible/setup_checklist.txt`  | Manual setup steps for this device     |
 
 Log rotation runs nightly at 03:00, keeping the last 500 lines of the pull log.
+
+---
+
+## Design patterns
+
+### Error handling
+
+Every role wraps its tasks in `block / rescue` so a failure in one task logs an
+error and skips that task, but execution continues with the rest of the playbook.
+The cron loop never aborts mid-run and leaves the device in a half-configured state.
+
+```yaml
+- name: Do something
+  block:
+    - name: The actual task
+      command: ...
+  rescue:
+    - name: Log failure and carry on
+      lineinfile:
+        path: "{{ ansible_log_file }}"
+        line: "{{ ansible_date_time.iso8601 }} | {{ device_label }} | ERROR: ... — {{ ansible_failed_result.msg | default('unknown') }}"
+        create: true
+```
+
+`any_errors_fatal: false` is set on every play in `local.yml` as an outer safety
+net — even if a task escapes its `rescue`, subsequent plays still run.
+
+Failures are never silently swallowed. Every `rescue` block writes a timestamped
+line to `~/.ansible/ansible-pull.log` or `~/.ansible/upgrade.log` so you always
+know what failed and when.
+
+**Failure behaviour by role:**
+
+| Role | If it fails | Recovery |
+|------|-------------|----------|
+| `common/packages` — `pkg update` | Logs "no network?", skips upgrade | Tries package installs from local cache |
+| `common/packages` — upgrade | Logs failure, continues | Package installs still run |
+| `common/packages` — individual install | Logs each failed package | Rest of the install list continues |
+| `common/dotfiles` | Logs error, leaves existing `.bashrc` | Previous version preserved as `.bashrc~` |
+| `cron` — `run-pull.sh` deploy | Logs error | Existing `run-pull.sh` stays in place; loop keeps running |
+| `cron` — Termux:Boot script | Logs error | Cron job still works until next reboot |
+| `obtainium` | Logs with hint to open app once | Previous `app_list.json` unchanged |
+| `syncthing` | Three independent blocks (config / boot / daemon) | Each fails separately; others unaffected |
+| `grapheneos` / `lineageos` | `debug` warning only | Never fatal |
+| `notifications` | Logs hint about Termux:API | Never aborts |
+
+### Idempotency
+
+Every task is safe to re-run every hour without side effects:
+
+- `pkg install` skips already-installed packages
+- `template` and `copy` only write when content has changed
+- `cron` module checks for an existing entry by name before adding
+- `lineinfile` checks for the line before appending
+- `file: state: directory` is a no-op if the directory exists
+
+### Variable precedence
+
+Ansible's precedence chain (lowest → highest) maps cleanly onto the repo layers:
+
+```
+roles/*/defaults/main.yml     ← fallback defaults, lowest priority
+group_vars/all/main.yml       ← universal vars
+group_vars/<os_group>.yml     ← OS-level defaults (grapheneos, lineageos, android)
+host_vars/<device>.yml        ← per-device overrides, highest priority
+```
+
+A variable set in `host_vars/p8p.yml` always wins over the same variable in
+`group_vars/grapheneos.yml`. This means OS-group files hold sensible defaults
+and host_vars only need to list exceptions.
+
+### Staggered cron timing
+
+All four devices poll GitHub every hour, but not at the same minute. The cron
+minute is seeded from `device_name` using Ansible's `random(seed=)` filter:
+
+```yaml
+minute: "{{ 59 | random(seed=device_name) }}"
+```
+
+This spreads the load across the hour and avoids rate-limit issues on GitHub.
+The minute is deterministic — the same device always runs at the same minute —
+so logs are predictable.
+
+### Secrets
+
+Secrets never appear in the repo in plaintext. `group_vars/all/vault.yml` is
+encrypted with `ansible-vault` and the vault password lives only on each device
+at `~/.ansible/.vault_pass` (written by `bootstrap.sh`, never committed).
+
+Reference secrets in any task or template as `{{ vault_some_key }}`. To rotate
+a secret, update the vault and push — devices pick it up within the hour.
+
+### Lockfile guard in `run-pull.sh`
+
+The hourly cron wrapper checks for a lockfile before starting. If a previous
+pull is still running (e.g. a slow network), the new invocation exits immediately
+rather than running two concurrent Ansible processes:
+
+```bash
+if [ -f "$LOCKFILE" ]; then
+  LOCKED_PID=$(cat "$LOCKFILE")
+  if kill -0 "$LOCKED_PID" 2>/dev/null; then
+    echo "already running, skipping"
+    exit 0
+  fi
+  rm -f "$LOCKFILE"   # stale lock from a crashed run
+fi
+```
+
+The lockfile stores the PID so stale locks from crashed runs are detected and
+cleaned up automatically.
+
+### Retry logic in `run-pull.sh`
+
+Mobile network connectivity is unreliable. `run-pull.sh` retries a failed
+`ansible-pull` up to three times with a 60-second delay between attempts before
+giving up until the next cron invocation.

@@ -1,68 +1,62 @@
 ---
 # =============================================================================
-# roles/lineageos/tasks/main.yml — LineageOS-specific configuration
-#
-# Applies to p3axl (Pixel 3a XL) and pxl (Pixel XL).
-# LineageOS may or may not have root (Magisk) and may or may not have MicroG.
-# These are controlled by has_root and has_microg in host_vars.
+# roles/lineageos/tasks/main.yml — LineageOS-specific tasks (p3axl, pxl)
 # =============================================================================
 
-- name: Confirm LineageOS-specific environment
-  debug:
-    msg: >
-      Running LineageOS role on {{ device_label }}.
-      has_root={{ has_root }}, has_microg={{ has_microg }}
+- name: Check root availability
+  block:
+    - name: Test su binary
+      command: "{{ lineageos_su_path }} -c 'echo root_ok'"
+      register: su_check
+      failed_when: false
+      changed_when: false
+      when: has_root
 
-# ---------------------------------------------------------------------------
-# Root detection — verify our host_vars match reality
-# ---------------------------------------------------------------------------
-- name: Check if su binary is accessible
-  command: "{{ lineageos_su_path }} -c 'echo root_ok'"
-  register: su_check
-  failed_when: false
-  changed_when: false
-  when: has_root
+    - name: Warn if su is not functional
+      debug:
+        msg: >
+          has_root is true for {{ device_label }} but su check failed.
+          Update host_vars/{{ device_name }}.yml if root is not present.
+      when:
+        - has_root
+        - su_check.rc is defined and su_check.rc != 0
+  rescue:
+    - debug:
+        msg: "WARN: root check failed on {{ device_label }} — {{ ansible_failed_result.msg | default('unknown') }}"
 
-- name: Warn if has_root is true but su is not functional
-  debug:
-    msg: >
-      has_root is true for {{ device_label }} but su check failed.
-      Update host_vars/{{ device_name }}.yml if root is not actually present.
-  when:
-    - has_root
-    - su_check.rc is defined and su_check.rc != 0
+- name: Check MicroG availability
+  block:
+    - name: Test MicroG package presence
+      command: pm list packages {{ item }}
+      loop: "{{ lineageos_microg_packages }}"
+      register: microg_check
+      failed_when: false
+      changed_when: false
+      when: has_microg
 
-# ---------------------------------------------------------------------------
-# MicroG detection — verify expected packages are present if has_microg
-# ---------------------------------------------------------------------------
-- name: Check for MicroG packages
-  command: pm list packages {{ item }}
-  loop: "{{ lineageos_microg_packages }}"
-  register: microg_check
-  failed_when: false
-  changed_when: false
-  when: has_microg
+    - name: Warn if MicroG packages are missing
+      debug:
+        msg: "has_microg is true for {{ device_label }} but {{ item.item }} not found."
+      loop: "{{ microg_check.results | default([]) }}"
+      when:
+        - has_microg
+        - item.rc is defined and item.rc != 0
+  rescue:
+    - debug:
+        msg: "WARN: MicroG check failed on {{ device_label }} — {{ ansible_failed_result.msg | default('unknown') }}"
 
-- name: Warn if has_microg is true but MicroG packages are missing
-  debug:
-    msg: >
-      has_microg is true for {{ device_label }} but MicroG package
-      {{ item.item }} was not found. Check your LineageOS build variant.
-  loop: "{{ microg_check.results | default([]) }}"
-  when:
-    - has_microg
-    - item.rc is defined and item.rc != 0
-
-# ---------------------------------------------------------------------------
-# LineageOS setup checklist (persisted on device for manual reference)
-# ---------------------------------------------------------------------------
 - name: Write LineageOS setup checklist
-  lineinfile:
-    path: "{{ ansible_state_dir }}/setup_checklist.txt"
-    line: "{{ item }}"
-    create: true
-  loop:
-    - "[ ] Settings > Privacy > Trust: review all trust items"
-    - "[ ] Settings > System > Updater: check for LineageOS OTA updates"
-    - "[ ] If using Magisk: verify SafetyNet / Play Integrity passes"
-    - "[ ] Install Termux:Boot and open it once to activate boot permission"
+  block:
+    - name: Log checklist
+      lineinfile:
+        path: "{{ ansible_state_dir }}/setup_checklist.txt"
+        line: "{{ item }}"
+        create: true
+      loop:
+        - "[ ] Settings > Privacy > Trust: review all trust items"
+        - "[ ] Settings > System > Updater: check for LineageOS OTA updates"
+        - "[ ] If using Magisk: verify Play Integrity passes"
+        - "[ ] Install Termux:Boot and open it once to activate boot permission"
+  rescue:
+    - debug:
+        msg: "WARN: could not write setup checklist on {{ device_label }}"
